@@ -7,20 +7,42 @@ import { redirect } from 'next/navigation'
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
+  customerId: z.string({
+    invalid_type_error: 'Please select a customer.',
+  }),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: 'Amount must be greater than 0.' }),
+  status: z.enum(['pending', 'paid'], {
+    invalid_type_error: 'Please select a status.',
+  }),
   date: z.string()
 })
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true })
 
-export async function createInvoice(formData: FormData) {
-  const { customerId, amount, status } = CreateInvoice.parse({
-    customerId: formData.get('customerId'),
-    amount: formData.get('amount'),
-    status: formData.get('status'),
+export async function createInvoice(prevState: State, formData: FormData) {
+  const customerIdRaw = formData.get('customerId'),
+    amountRaw = formData.get('amount'),
+    statusRaw = formData.get('status');
+
+  const validatedFields = CreateInvoice.safeParse({
+    customerId: customerIdRaw,
+    amount: amountRaw,
+    status: statusRaw,
   });
+
+  // If form validation fails, return an error message
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to create invoice.',
+      prevState
+    };
+  }
+
+  // Prepare data for insertion
+  const { customerId, amount, status } = validatedFields.data;
 
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split('T')[0];
@@ -68,7 +90,6 @@ export async function updateInvoice(id: string, formData: FormData) {
 }
 
 export async function deleteInvoice(id: string) {
-  throw new Error("nu uh")
 
   try {
     await sql`
@@ -85,4 +106,13 @@ export async function deleteInvoice(id: string) {
       message: 'Failed to delete invoice.'
     }
   }
+}
+
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
 }
