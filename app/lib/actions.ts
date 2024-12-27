@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { sql } from '@vercel/postgres'
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation'
+import { signIn } from '@/auth'
+import { AuthError } from 'next-auth'
 
 const FormSchema = z.object({
   id: z.string(),
@@ -34,10 +36,10 @@ export async function createInvoice(prevState: State, formData: FormData) {
 
   // If form validation fails, return an error message
   if (!validatedFields.success) {
+    console.log(formData)
     return {
       errors: validatedFields.error.flatten().fieldErrors,
-      message: 'Missing Fields. Failed to create invoice.',
-      prevState
+      message: 'Missing Fields. Failed to create invoice.'
     };
   }
 
@@ -116,3 +118,26 @@ export type State = {
   };
   message?: string | null;
 }
+
+// Authentication
+export async function authenticate(prevState: string | undefined, formData: FormData) {
+  try {
+    await signIn('credentials', formData)
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case 'CredentialsSignin':
+          return {
+            message: 'Invalid credentials'
+          }
+        default:
+          return {
+            message: 'Something went wrong'
+          }
+      }
+    }
+  }
+
+  redirect('/dashboard')
+}
+
